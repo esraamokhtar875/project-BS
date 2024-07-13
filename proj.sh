@@ -2,6 +2,80 @@
 let cont=0
 let match=0
 let connect=0
+
+# Define the db_menu function
+db_menu() {
+    select t in Create-Table List-Tables Drop-Table Insert-into-Table Select-From-Table Delete-From-Table Update-Table Back-to-Main-Menu; do
+        case $t in
+            'Create-Table')
+                read -p "Enter the name of your table: " table
+                ct=0
+                for i in $(ls); do
+                    if [[ $i == $table ]]; then
+                        ct+=1
+                    fi
+                done
+
+                if [[ ct -gt 0 ]]; then
+                    echo "This table already exists."
+                else
+                    touch $table
+                fi
+                ;;
+            'List-Tables')
+                ls
+                ;;
+            'Drop-Table')
+                read -p "Enter the name of the table to delete: " table
+                rm $table
+                ;;
+            'Insert-into-Table')
+                read -p "Enter the name of the table: " table
+                if [[ -f $table ]]; then
+                    read -p "Insert name of columns of table: " columns
+                    read -p "Insert values: " values
+                    echo "$columns : $values" >> $table
+                else
+                    echo "Table $table does not exist."
+                fi
+                ;;
+            'Select-From-Table')
+                read -p "Enter table name: " table
+                if [[ -f $table ]]; then
+                    cat $table
+                else
+                    echo "Table $table does not exist."
+                fi
+                ;;
+            'Delete-From-Table')
+                read -p "Enter table name: " table
+                if [[ -f $table ]]; then
+                    read -p "Enter row to delete: " row
+                    sed -i "/$row/d" $table
+                else
+                    echo "Table $table does not exist."
+                fi
+                ;;
+            'Update-Table')
+                read -p "Enter table name: " table
+                if [[ -f $table ]]; then
+                    read -p "Enter row to update: " old_row
+                    read -p "Enter new row: " new_row
+                    sed -i "s/$old_row/$new_row/" $table
+                else
+                    echo "Table $table does not exist."
+                fi
+                ;;
+            'Back-to-Main-Menu')
+                break
+                ;;
+            *)
+                echo "Invalid option"
+                ;;
+        esac
+    done
+}
+
 for i in $(ls $HOME)
 do 
 	if [[  $i == "DBSQL" ]]
@@ -57,6 +131,7 @@ if [[ $cont -gt 0 ]]
 					if [[ $connect -gt 0 ]] 
 				                then
 						cd ./$conn
+						db_menu
 					else
 						echo "this DB is not found "
 					fi 
