@@ -52,53 +52,113 @@ db_menu() {
 				   echo " this $table is not found to delet"
 				fi
                 ;;
-            'Insert-into-Table')
-                read -p "Enter the name of the table with this pattern (^[A-Za-z]+$) : " table
-                 regxNtable='^[A-Za-z]+$'
-	      if [[ $table =~ $regxNtable ]]
-	      then
-                if [[ -f $table ]]; then
-                    read -p "Insert name of columns of table with this pattern (^[A-Za-z]+$) : " columns
-                    regxcol='^[A-Za-z]+$'
-	          if [[ $columns =~ $regxcol ]]
-	          then
-	          
-                    read -p "Insert data-type of columns of table string or number: " datatypecol
-		         if [[ $datatypecol == "string" ]]
-		         then
-		          read -p "Insert string values with this pattern (^[A-Za-z]+$) : " values1
-		            regxval1='^[A-Za-z]+$'
-				if [[ $values1 =~ $regxval1 ]]
-				then
-			
-		                     echo "$columns : $values1" >> $table
-		                     else
-		                     echo "invalid pattern of string value"
-		                     fi
-		          elif [[ $datatypecol == "number" ]]
-		           then
-		            read -p "Insert numerical values with this pattern (^[0-9]+$)  : " values2
-		                regxval2='^[0-9]+$'
-				if [[ $values2 =~ $regxval2 ]]
-				then
-		                     echo "$columns : $values2" >> $table
-		                     else
-		                     echo "invalid pattern of numerical value"
-		                     fi
-		          else
-		          echo "--------error : please enter right datatype >string Or number only-----"
-		          fi
-		 
-		      else
-		      echo "invalid pattern of column"
-		      fi
-                else
-                    echo "Table $table does not exist."
-                fi
-                else
-                echo "invalid pattern name of table"
-                fi
-                ;;
+	  'Insert-into-Table') 
+			    read -p "Enter the name of the table: " table
+			    echo "$(ls $path2)"
+			    countInsert=0
+
+			    for i in $(ls $path2); do
+				if [[ $i == $table ]]; then
+				    countInsert+=1
+				fi
+			    done
+
+			    if [[ $countInsert -gt 0 ]]; then
+				# Read the first line of the table to get the column names
+				columns=$(head -n 1 "$table")
+				column_types=$(sed -n '2p' "$table")
+
+				if [[ -z $columns ]]; then
+				    read -p "Insert the name of columns (separated by commas): " columns
+				    rejxofcol='^[A-Za-z]+(,[A-Za-z]+)*$'
+				    if [[ $columns =~ $rejxofcol ]]; then
+					echo "$columns" > "$table"
+				    else
+					echo "Invalid pattern of column names."
+					return
+				    fi
+
+				    read -p "Insert the types of columns (e.g., text, number, date separated by commas): " column_types
+				    rejxoftypes='^(text|number|date)(,(text|number|date))*$'
+				    if [[ $column_types =~ $rejxoftypes ]]; then
+					echo "$column_types" >> "$table"
+				    else
+					echo "Invalid pattern of column types."
+					return
+				    fi
+				fi
+
+				IFS=',' read -r -a columns_array <<< "$columns"
+				IFS=',' read -r -a column_types_array <<< "$column_types"
+
+				read -p "Insert values (separated by commas): " values
+				IFS=',' read -r -a values_array <<< "$values"
+
+				if [[ ${#columns_array[@]} -ne ${#values_array[@]} ]]; then
+				    echo "The number of columns and values do not match."
+				    return
+				fi
+
+				# Set the first column as the unique column (primary key)
+				unique_index=0
+				unique_value="${values_array[$unique_index]}"
+
+				# Check for duplicate unique column value
+				while IFS=':' read -r -a row; do
+				    if [[ "${row[$unique_index]}" == "$unique_value" ]]; then
+					echo "Duplicate value for unique column found. Insertion aborted."
+					return
+				    fi
+				done < <(tail -n +3 "$table")
+
+				# Validate and format the data
+				for i in "${!columns_array[@]}"; do
+				    value="${values_array[$i]}"
+				    type="${column_types_array[$i]}"
+				    case "$type" in
+					"number")
+					    if ! [[ $value =~ ^[0-9]+$ ]]; then
+						echo "Invalid value for column ${columns_array[$i]}. Expected a number."
+						return
+					    fi
+					    ;;
+					"text")
+					    if ! [[ $value =~ ^[A-Za-z]+$ ]]; then
+						echo "Invalid value for column ${columns_array[$i]}. Expected text."
+						return
+					    fi
+					    ;;
+					"date")
+					    if ! [[ $value =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+						echo "Invalid value for column ${columns_array[$i]}. Expected a date in YYYY-MM-DD format."
+						return
+					    fi
+					    ;;
+					*)
+					    echo "Unknown type for column ${columns_array[$i]}."
+					    return
+					    ;;
+				    esac
+				done
+
+				# Format the data and append to the table
+				row_data=$(IFS=':'; echo "${values_array[*]}")
+				echo "$row_data" >> "$table"
+				echo "Data inserted successfully."
+			    else
+				echo "Table $table does not exist."
+			    fi
+
+			# Main script
+			case $1 in
+			    'Insert-into-Table')
+				insert_into_table
+				;;
+			    *)
+				echo "Invalid option."
+				;;
+			esac
+			;;
             'Select-From-Table')
                 read -p "Enter table name: " table
                 if [[ -f $table ]]; then
@@ -107,15 +167,63 @@ db_menu() {
                     echo "Table $table does not exist."
                 fi
                 ;;
-            'Delete-From-Table')
-                read -p "Enter table name: " table
-                if [[ -f $table ]]; then
-                    read -p "Enter row to delete: " row
-                    sed -i "/$row/d" $table
-                else
-                    echo "Table $table does not exist."
-                fi
-                ;;
+          'Delete-From-Table') 
+
+			read -p "Enter table name: " table
+
+			if [[ -f $table ]]; then
+			    echo "Choose an option:"
+			    echo "1. Delete row"
+			    echo "2. Delete column"
+			    echo "3. Delete specific data"
+			    read -p "Enter your choice: " choice
+
+			    case $choice in
+				1)
+				    # Delete row
+				    read -p "Enter row number to delete (excluding header): " row_num
+				    if [[ $row_num -ge 1 ]]; then
+					# Adjust row_num to account for header
+					row_num=$((row_num + 1))
+					sed -i "${row_num}d" $table
+					echo "Row $row_num deleted from $table."
+				    else
+					echo "Invalid row number."
+				    fi
+				    ;;
+				2)
+				    # Delete column
+				    read -p "Enter column number to delete: " col_num
+				    if [[ $col_num -ge 1 ]]; then
+					awk -v col=$col_num 'BEGIN {FS=OFS=","} {
+					    for (i=col; i<NF; i++) $i=$(i+1);
+					    NF--;
+					    print
+					}' $table > temp && mv temp $table
+					echo "Column $col_num deleted from $table."
+				    else
+					echo "Invalid column number."
+				    fi
+				    ;;
+				3)
+				    # Delete specific data
+				    read -p "Enter data to delete: " data
+				    awk -v data="$data" 'BEGIN {FS=OFS=","} {
+					for (i=1; i<=NF; i++) {
+					    if ($i == data) $i = "";
+					}
+					print
+				    }' $table > temp && mv temp $table
+				    echo "Data '$data' deleted from $table."
+				    ;;
+				*)
+				    echo "Invalid choice."
+				    ;;
+			    esac
+			else
+			    echo "Table $table does not exist."
+			fi
+                      ;;
             'Update-Table')
                 read -p "Enter table name: " table
                 if [[ -f $table ]]; then
