@@ -160,13 +160,41 @@ db_menu() {
 			esac
 			;;
             'Select-From-Table')
-                read -p "Enter table name: " table
-                if [[ -f $table ]]; then
-                    cat $table
-                else
-                    echo "Table $table does not exist."
-                fi
-                ;;
+                 read -p "Enter table name: " table
+                cont=0
+                for i in $(ls $path2)
+                do
+		      if [[ $table == $i  ]]
+		      then 
+		      cont+=1
+		      fi
+               done
+               if [[ $cont -gt 0 ]]
+                then
+		       select option in all_columns specific_column exit
+			    do
+			        case $option in
+				  'all_columns')
+					cat "$table"
+					;;
+				      'specific_column')
+				       read -p "select column name : " column_name	
+				           	if head -n 1 "$path2/$table" | grep -qw "$column_name"
+				        			then
+						        awk -v col="$column_name" 'NR > 1 {print $col}' "$path2/$table"
+						    else
+						        echo "Column '$column_name' does not exist in $table."
+                                                                  fi		     
+				  	;;
+				       'exit')
+				           break
+				      ;;
+				      esac
+			   done
+               else
+		echo "Table $table does not exist."
+               fi
+                 ;;
           'Delete-From-Table') 
 
 			read -p "Enter table name: " table
