@@ -224,16 +224,32 @@ db_menu() {
 			    echo "Table $table does not exist."
 			fi
                       ;;
-            'Update-Table')
+			 'Update-Table')
                 read -p "Enter table name: " table
                 if [[ -f $table ]]; then
-                    read -p "Enter row to update: " old_row
-                    read -p "Enter new row: " new_row
-                    sed -i "s/$old_row/$new_row/" $table
+                    columns=$(head -n 1 "$table")
+                    IFS=',' read -r -a columns_array <<< "$columns"
+                    read -p "Enter primary key to identify the row to update: " primary_key
+                    row_num=$(awk -F':' -v pk="$primary_key" '$1 == pk {print NR}' "$table")
+                    if [[ -z $row_num ]]; then
+                        echo "Primary key not found."
+                        return
+                    fi
+                    row=$(sed -n "${row_num}p" "$table")
+                    IFS=':' read -r -a row_data <<< "$row"
+                    for i in "${!columns_array[@]}"; do
+                     read -p "Enter new value for ${columns_array[$i]} (or press Enter to keep current value: ${row_data[$i]}): " new_value
+                        if [[ -n $new_value ]]; then
+                            row_data[$i]=$new_value
+                        fi
+                    done
+                    updated_row=$(IFS=':'; echo "${row_data[*]}")
+                    sed -i "${row_num}s/.*/$updated_row/" "$table"
+                    echo "Row with primary key $primary_key updated successfully."
                 else
                     echo "Table $table does not exist."
                 fi
-                ;;
+                ;;	
             'Back-to-Main-Menu')
             cd $HOME/DBSQL
                 break
